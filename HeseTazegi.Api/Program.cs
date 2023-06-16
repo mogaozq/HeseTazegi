@@ -1,74 +1,83 @@
-using HeseTazegi.Persistance;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
+using HeseTazegi.Application;
+using HeseTazegi.Persistance;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.OpenApi.Models;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.OpenApi.Writers;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
-using static System.Formats.Asn1.AsnWriter;
+using System;
 
-namespace HeseTazegi.Api
+var builder = WebApplication.CreateBuilder(args);
+
+//add services
+builder.Services.AddApplication();
+builder.Services.AddPersistance(builder.Configuration);
+builder.Services.AddControllers();
+builder.Services.AddSwaggerGen(c =>
 {
-    public class Program
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "HeseTazegi.Api", Version = "v1" });
+});
+
+//migrate database
+var app = builder.Build();
+await MigrateAndSeedAsync(app);
+
+//add middlewares
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+    app.UseSwagger();
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "HeseTazegi.Api v1"));
+}
+
+app.UseHttpsRedirection();
+app.UseRouting();
+app.UseAuthorization();
+app.UseEndpoints(endpoints =>
+{
+    endpoints.MapControllers();
+});
+
+//start the host
+app.Run();
+
+static async Task MigrateAndSeedAsync(IHost host)
+{
+    using var scope = host.Services.CreateScope();
+
+    try
     {
-        public static async Task Main(string[] args)
+        var services = scope.ServiceProvider;
+
+        var context = services.GetRequiredService<ApplicationDbContext>();
+        if (context.Database.IsRelational())
         {
-            var host = CreateHostBuilder(args).Build();
-
-            await MigrateAndSeedAsync(host);
-
-            host.Run();
+            context.Database.Migrate();
         }
 
-        private static async Task MigrateAndSeedAsync(IHost host)
-        {
-            using var scope = host.Services.CreateScope();
+        await ApplicationDbContextSeed.SeedCategoryAsync(context);
+        await ApplicationDbContextSeed.SeedIngredientsAsync(context);
+        await ApplicationDbContextSeed.SeedEquipmentsAsync(context);
+        await ApplicationDbContextSeed.SeedNutrientsAsync(context);
 
-            try
-            {
-                var services = scope.ServiceProvider;
+        await ApplicationDbContextSeed.SeedFoodsAsync(context);
+        await ApplicationDbContextSeed.SeedFoodIngredientsAsync(context);
+        await ApplicationDbContextSeed.SeedFoodEquipmentsAsync(context);
+        await ApplicationDbContextSeed.SeedFoodNutritionFactsAsync(context);
 
-                var context = services.GetRequiredService<ApplicationDbContext>();
-                if (context.Database.IsRelational())
-                {
-                    context.Database.Migrate();
-                }
+        await ApplicationDbContextSeed.SeedUsersAsync(context);
+        await ApplicationDbContextSeed.SeedUserAllergicIngredientsAsync(context);
 
-                await ApplicationDbContextSeed.SeedCategoryAsync(context);
-                await ApplicationDbContextSeed.SeedIngredientsAsync(context);
-                await ApplicationDbContextSeed.SeedEquipmentsAsync(context);
-                await ApplicationDbContextSeed.SeedNutrientsAsync(context);
+    }
+    catch (Exception ex)
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-                await ApplicationDbContextSeed.SeedFoodsAsync(context);
-                await ApplicationDbContextSeed.SeedFoodIngredientsAsync(context);
-                await ApplicationDbContextSeed.SeedFoodEquipmentsAsync(context);
-                await ApplicationDbContextSeed.SeedFoodNutritionFactsAsync(context);
+        logger.LogError(ex, "An error occured while migrating or seeding the database");
 
-                await ApplicationDbContextSeed.SeedUsersAsync(context);
-                await ApplicationDbContextSeed.SeedUserAllergicIngredientsAsync(context);
-
-            }
-            catch (Exception ex)
-            {
-                var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-
-                logger.LogError(ex, "An error occured while migrating or seeding the database");
-
-                throw;
-            }
-        }
-
-        public static IHostBuilder CreateHostBuilder(string[] args) =>
-            Host.CreateDefaultBuilder(args)
-                .ConfigureWebHostDefaults(webBuilder =>
-                {
-                    webBuilder.UseStartup<Startup>();
-                });
+        throw;
     }
 }
