@@ -8,6 +8,8 @@ using System.Text;
 using System.Threading.Tasks;
 using HeseTazegi.Application.Interfaces;
 using HeseTazegi.Application.Implementations;
+using HeseTazegi.Application.Common.Behaviours;
+using FluentValidation;
 
 namespace HeseTazegi.Application
 {
@@ -19,7 +21,8 @@ namespace HeseTazegi.Application
             services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly()));
             services.AddScoped<ICurrentUserService, FakeCurrentUserService>();
             services.AddScoped<IFoodRecommederService, FakeFoodRecommenderService>();
-
+            services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
+            services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
         }
     }
 }

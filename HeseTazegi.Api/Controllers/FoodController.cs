@@ -29,7 +29,6 @@ namespace HeseTazegi.Api.Controllers
         public async Task<IEnumerable<FoodDto>> GetNonAllergicSimilarFoodsAsync(int foodId)
         {
             return await _mediator.Send(new GetNonAllergicSimilarFoodsQuery(foodId));
-     
         }
     }
 }
